@@ -1,7 +1,6 @@
 [build]
 builder = "dockerfile"
-dockerfilePath = "iar-frontend/Dockerfile"
-buildContext = "iar-frontend"
+dockerfilePath = "Dockerfile"
 
 [deploy]
 healthcheckPath = "/"

@@ -1,0 +1,19 @@
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    resolver 8.8.8.8 valid=30s ipv6=off;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/ {
+        set $upstream ${API_UPSTREAM};
+        proxy_pass $upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
