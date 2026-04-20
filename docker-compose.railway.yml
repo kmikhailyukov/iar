@@ -1,0 +1,89 @@
+services:
+  iar-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: iar
+      POSTGRES_PASSWORD: iar
+      POSTGRES_DB: iar
+    volumes:
+      - iar-postgres-data:/var/lib/postgresql/data
+      - ./iar-db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks: [iar-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iar"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: demo
+      RABBITMQ_DEFAULT_PASS: demo
+    networks: [iar-net]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  iar-api:
+    build: ./iar-api
+    environment:
+      DATABASE_URL: postgresql://iar:iar@iar-postgres:5432/iar
+      ZORROBPM_API: http://localhost
+      LOTUS_MOCK_URL: http://iar-lotus-mock:8000
+      POLL_INTERVAL_SEC: "30"
+    networks: [iar-net]
+    depends_on:
+      iar-postgres:
+        condition: service_healthy
+
+  iar-llm-worker:
+    build: ./iar-llm-worker
+    environment:
+      RABBITMQ_URL: amqp://demo:demo@rabbitmq:5672/
+      ZORROBPM_API: http://localhost
+      IAR_API_URL: http://iar-api:8000
+    networks: [iar-net]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      iar-api:
+        condition: service_started
+
+  iar-notify-worker:
+    build: ./iar-notify-worker
+    environment:
+      RABBITMQ_URL: amqp://demo:demo@rabbitmq:5672/
+      ZORROBPM_API: http://localhost
+      IAR_API_URL: http://iar-api:8000
+    networks: [iar-net]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      iar-api:
+        condition: service_started
+
+  iar-lotus-mock:
+    build: ./iar-lotus-mock
+    environment:
+      DATABASE_URL: postgresql://iar:iar@iar-postgres:5432/iar
+    networks: [iar-net]
+    depends_on:
+      iar-postgres:
+        condition: service_healthy
+
+  iar-frontend:
+    build: ./iar-frontend
+    networks: [iar-net]
+    ports:
+      - "80:80"
+    depends_on:
+      - iar-api
+
+volumes:
+  iar-postgres-data:
+
+networks:
+  iar-net:

@@ -1,0 +1,5 @@
+[build]
+dockerComposeFile = "docker-compose.railway.yml"
+
+[deploy]
+startCommand = ""
