@@ -2,6 +2,7 @@ version: "3.9"
 
 services:
   iar-postgres:
+    restart: always
     image: postgres:16
     environment:
       POSTGRES_USER: iar
@@ -18,6 +19,7 @@ services:
       retries: 10
 
   iar-api:
+    restart: always
     build: ./iar-api
     environment:
       DATABASE_URL: postgresql://iar:iar@iar-postgres:5432/iar
@@ -35,6 +37,7 @@ services:
       - traefik.http.services.iar-api.loadbalancer.server.port=8000
 
   iar-llm-worker:
+    restart: always
     build: ./iar-llm-worker
     environment:
       RABBITMQ_URL: amqp://demo:demo@rabbitmq:5672/
@@ -45,6 +48,7 @@ services:
       - iar-api
 
   iar-notify-worker:
+    restart: always
     build: ./iar-notify-worker
     environment:
       RABBITMQ_URL: amqp://demo:demo@rabbitmq:5672/
@@ -55,6 +59,7 @@ services:
       - iar-api
 
   iar-lotus-mock:
+    restart: always
     build: ./iar-lotus-mock
     environment:
       DATABASE_URL: postgresql://iar:iar@iar-postgres:5432/iar
@@ -69,6 +74,7 @@ services:
       - traefik.http.services.lotus-mock.loadbalancer.server.port=8000
 
   iar-frontend:
+    restart: always
     build: ./iar-frontend
     networks: [iar-internal, dokploy-network]
     labels:
