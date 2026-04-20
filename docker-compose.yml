@@ -1,0 +1,88 @@
+version: "3.9"
+
+services:
+  iar-postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: iar
+      POSTGRES_PASSWORD: iar
+      POSTGRES_DB: iar
+    volumes:
+      - iar-postgres-data:/var/lib/postgresql/data
+      - ./iar-db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks: [iar-internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iar"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  iar-api:
+    build: ./iar-api
+    environment:
+      DATABASE_URL: postgresql://iar:iar@iar-postgres:5432/iar
+      ZORROBPM_API: https://bpm.zorro.kt
+      LOTUS_MOCK_URL: http://iar-lotus-mock:8000
+      POLL_INTERVAL_SEC: "30"
+    networks: [iar-internal, zorrobpm_default, dokploy-network]
+    depends_on:
+      iar-postgres:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.iar-api.rule=Host(`iar-api.zorro.kt`)
+      - traefik.http.routers.iar-api.entrypoints=web,websecure
+      - traefik.http.services.iar-api.loadbalancer.server.port=8000
+
+  iar-llm-worker:
+    build: ./iar-llm-worker
+    environment:
+      RABBITMQ_URL: amqp://demo:demo@rabbitmq:5672/
+      ZORROBPM_API: https://bpm.zorro.kt
+      IAR_API_URL: http://iar-api:8000
+    networks: [iar-internal, zorrobpm_default]
+    depends_on:
+      - iar-api
+
+  iar-notify-worker:
+    build: ./iar-notify-worker
+    environment:
+      RABBITMQ_URL: amqp://demo:demo@rabbitmq:5672/
+      ZORROBPM_API: https://bpm.zorro.kt
+      IAR_API_URL: http://iar-api:8000
+    networks: [iar-internal, zorrobpm_default]
+    depends_on:
+      - iar-api
+
+  iar-lotus-mock:
+    build: ./iar-lotus-mock
+    environment:
+      DATABASE_URL: postgresql://iar:iar@iar-postgres:5432/iar
+    networks: [iar-internal, dokploy-network]
+    depends_on:
+      iar-postgres:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.lotus-mock.rule=Host(`lotus-mock.zorro.kt`)
+      - traefik.http.routers.lotus-mock.entrypoints=web,websecure
+      - traefik.http.services.lotus-mock.loadbalancer.server.port=8000
+
+  iar-frontend:
+    build: ./iar-frontend
+    networks: [iar-internal, dokploy-network]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.iar.rule=Host(`iar.zorro.kt`)
+      - traefik.http.routers.iar.entrypoints=web,websecure
+      - traefik.http.services.iar.loadbalancer.server.port=80
+
+volumes:
+  iar-postgres-data:
+
+networks:
+  iar-internal:
+  zorrobpm_default:
+    external: true
+  dokploy-network:
+    external: true

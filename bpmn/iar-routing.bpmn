@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+             xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+             xmlns:modeler="http://camunda.org/schema/modeler/1.0"
+             id="Definitions_iar"
+             targetNamespace="http://bpmn.io/schema/bpmn"
+             exporter="IAR BPMN Builder"
+             exporterVersion="1.0">
+
+  <process id="iar-routing" name="IAR Routing" isExecutable="true">
+
+    <!-- Start Event -->
+    <startEvent id="start" name="Поручение получено">
+      <outgoing>flow_start_classify</outgoing>
+    </startEvent>
+
+    <!-- Service Task: LLM Classification -->
+    <serviceTask id="classify" name="Классификация LLM">
+      <extensionElements>
+        <zeebe:taskDefinition type="iar_classify" retries="2" />
+      </extensionElements>
+      <incoming>flow_start_classify</incoming>
+      <outgoing>flow_classify_review</outgoing>
+    </serviceTask>
+
+    <!-- User Task: Manager Review -->
+    <userTask id="manager_review" name="Проверка руководителем">
+      <extensionElements>
+        <zeebe:assignmentDefinition candidateGroups="managers" />
+      </extensionElements>
+      <incoming>flow_classify_review</incoming>
+      <outgoing>flow_review_notify</outgoing>
+    </userTask>
+
+    <!-- Service Task: Notify Executor -->
+    <serviceTask id="notify_executor" name="Уведомить исполнителя">
+      <extensionElements>
+        <zeebe:taskDefinition type="iar_notify" retries="2" />
+      </extensionElements>
+      <incoming>flow_review_notify</incoming>
+      <outgoing>flow_notify_inbox</outgoing>
+    </serviceTask>
+
+    <!-- User Task: Executor Inbox -->
+    <userTask id="executor_inbox" name="Входящее у исполнителя">
+      <extensionElements>
+        <zeebe:assignmentDefinition assignee="=assignedTo" />
+      </extensionElements>
+      <incoming>flow_notify_inbox</incoming>
+      <outgoing>flow_inbox_end</outgoing>
+    </userTask>
+
+    <!-- End Event -->
+    <endEvent id="end" name="Завершено">
+      <incoming>flow_inbox_end</incoming>
+    </endEvent>
+
+    <!-- Sequence Flows -->
+    <sequenceFlow id="flow_start_classify" sourceRef="start" targetRef="classify" />
+    <sequenceFlow id="flow_classify_review" sourceRef="classify" targetRef="manager_review" />
+    <sequenceFlow id="flow_review_notify" sourceRef="manager_review" targetRef="notify_executor" />
+    <sequenceFlow id="flow_notify_inbox" sourceRef="notify_executor" targetRef="executor_inbox" />
+    <sequenceFlow id="flow_inbox_end" sourceRef="executor_inbox" targetRef="end" />
+
+  </process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="iar-routing">
+
+      <bpmndi:BPMNShape id="start_di" bpmnElement="start">
+        <dc:Bounds x="152" y="162" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="130" y="205" width="80" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="classify_di" bpmnElement="classify">
+        <dc:Bounds x="240" y="140" width="120" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="manager_review_di" bpmnElement="manager_review">
+        <dc:Bounds x="420" y="140" width="120" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="notify_executor_di" bpmnElement="notify_executor">
+        <dc:Bounds x="600" y="140" width="120" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="executor_inbox_di" bpmnElement="executor_inbox">
+        <dc:Bounds x="780" y="140" width="120" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="end_di" bpmnElement="end">
+        <dc:Bounds x="962" y="162" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="956" y="205" width="48" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="flow_start_classify_di" bpmnElement="flow_start_classify">
+        <di:waypoint x="188" y="180" />
+        <di:waypoint x="240" y="180" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="flow_classify_review_di" bpmnElement="flow_classify_review">
+        <di:waypoint x="360" y="180" />
+        <di:waypoint x="420" y="180" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="flow_review_notify_di" bpmnElement="flow_review_notify">
+        <di:waypoint x="540" y="180" />
+        <di:waypoint x="600" y="180" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="flow_notify_inbox_di" bpmnElement="flow_notify_inbox">
+        <di:waypoint x="720" y="180" />
+        <di:waypoint x="780" y="180" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="flow_inbox_end_di" bpmnElement="flow_inbox_end">
+        <di:waypoint x="900" y="180" />
+        <di:waypoint x="962" y="180" />
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+
+</definitions>

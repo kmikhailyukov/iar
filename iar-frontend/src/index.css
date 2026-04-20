@@ -1,0 +1,40 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; }
+.container { max-width: 900px; margin: 0 auto; padding: 20px; }
+.card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+.btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+.btn-primary { background: #2563eb; color: white; }
+.btn-secondary { background: #e5e7eb; color: #333; }
+.btn-success { background: #16a34a; color: white; }
+.btn-danger { background: #dc2626; color: white; }
+.btn:hover { opacity: 0.85; }
+.badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+.badge-green { background: #dcfce7; color: #166534; }
+.badge-yellow { background: #fef9c3; color: #854d0e; }
+.badge-red { background: #fee2e2; color: #991b1b; }
+.badge-medium { background: #dbeafe; color: #1e40af; }
+nav { background: #1e40af; padding: 12px 24px; display: flex; gap: 24px; align-items: center; }
+nav a { color: white; text-decoration: none; font-weight: 500; }
+nav a:hover { opacity: 0.8; }
+nav .title { font-size: 18px; font-weight: 700; margin-right: auto; }
+h1 { font-size: 22px; margin-bottom: 20px; }
+h2 { font-size: 16px; margin-bottom: 8px; }
+.text-muted { color: #6b7280; font-size: 13px; }
+.meta { display: flex; gap: 12px; flex-wrap: wrap; margin: 8px 0; }
+.suggestion-box { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 16px; margin: 16px 0; }
+.suggestion-box h3 { font-size: 14px; color: #0369a1; margin-bottom: 8px; }
+.justification { font-size: 13px; color: #555; font-style: italic; margin-top: 8px; border-left: 3px solid #bae6fd; padding-left: 10px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.select-field { padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+.empty-state { text-align: center; color: #9ca3af; padding: 40px; }
+.loading { text-align: center; color: #6b7280; padding: 20px; }
+.error-msg { background: #fee2e2; color: #991b1b; padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; }
+.top3-list { list-style: none; margin-top: 8px; }
+.top3-list li { font-size: 13px; padding: 4px 0; display: flex; gap: 8px; align-items: center; }
+.manual-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.manual-row input { flex: 1; min-width: 160px; padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+.inbox-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.task-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.task-row .task-info { flex: 1; min-width: 0; }
+.task-text { font-size: 15px; font-weight: 500; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task-meta { display: flex; gap: 10px; flex-wrap: wrap; }
