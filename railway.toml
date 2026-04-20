@@ -5,4 +5,4 @@ buildContext = "iar-frontend"
 
 [deploy]
 healthcheckPath = "/"
-restartPolicyType = "on-failure"
+restartPolicyType = "ON_FAILURE"
