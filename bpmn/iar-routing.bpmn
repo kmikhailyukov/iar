@@ -5,129 +5,278 @@
              xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
              xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
              xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
-             xmlns:modeler="http://camunda.org/schema/modeler/1.0"
              id="Definitions_iar"
              targetNamespace="http://bpmn.io/schema/bpmn"
              exporter="IAR BPMN Builder"
-             exporterVersion="1.0">
+             exporterVersion="2.0">
 
   <process id="iar-routing" name="IAR Routing" isExecutable="true">
 
-    <!-- Start Event -->
-    <startEvent id="start" name="Поручение получено">
+    <!-- ═══════════════════════════════════════════════════════
+         START
+    ═══════════════════════════════════════════════════════ -->
+    <startEvent id="start" name="Поручение&#10;получено">
       <outgoing>flow_start_classify</outgoing>
     </startEvent>
 
-    <!-- Service Task: LLM Classification -->
+    <!-- ═══════════════════════════════════════════════════════
+         ШАГ 1: Классификация LLM
+    ═══════════════════════════════════════════════════════ -->
     <serviceTask id="classify" name="Классификация LLM">
       <extensionElements>
         <zeebe:taskDefinition type="iar_classify" retries="2" />
       </extensionElements>
       <incoming>flow_start_classify</incoming>
-      <outgoing>flow_classify_review</outgoing>
+      <outgoing>flow_classify_gw</outgoing>
     </serviceTask>
 
-    <!-- User Task: Manager Review -->
-    <userTask id="manager_review" name="Проверка руководителем">
+    <!-- ═══════════════════════════════════════════════════════
+         ШЛЮЗ: Зона уверенности
+    ═══════════════════════════════════════════════════════ -->
+    <exclusiveGateway id="confidence_gw" name="Уверенность&#10;≥ 50?">
+      <incoming>flow_classify_gw</incoming>
+      <outgoing>flow_gw_review</outgoing>
+      <outgoing>flow_gw_manual</outgoing>
+    </exclusiveGateway>
+
+    <!-- ═══════════════════════════════════════════════════════
+         ШАГИ 2a / 2b: Задачи руководителя
+    ═══════════════════════════════════════════════════════ -->
+    <!-- GREEN / YELLOW: уверенность достаточная -->
+    <userTask id="manager_review" name="Проверка&#10;руководителем">
       <extensionElements>
         <zeebe:assignmentDefinition candidateGroups="managers" />
       </extensionElements>
-      <incoming>flow_classify_review</incoming>
-      <outgoing>flow_review_notify</outgoing>
+      <incoming>flow_gw_review</incoming>
+      <incoming>flow_reject_review</incoming>
+      <outgoing>flow_review_merge</outgoing>
     </userTask>
 
-    <!-- Service Task: Notify Executor -->
-    <serviceTask id="notify_executor" name="Уведомить исполнителя">
+    <!-- RED: низкая уверенность, ручное назначение -->
+    <userTask id="manager_manual" name="Ручное назначение&#10;(RED-зона)">
       <extensionElements>
-        <zeebe:taskDefinition type="iar_notify" retries="2" />
+        <zeebe:assignmentDefinition candidateGroups="managers" />
       </extensionElements>
-      <incoming>flow_review_notify</incoming>
-      <outgoing>flow_notify_inbox</outgoing>
+      <incoming>flow_gw_manual</incoming>
+      <outgoing>flow_manual_merge</outgoing>
+    </userTask>
+
+    <!-- ═══════════════════════════════════════════════════════
+         СЛИЯНИЕ после обоих решений руководителя
+    ═══════════════════════════════════════════════════════ -->
+    <exclusiveGateway id="merge_gw" name="">
+      <incoming>flow_review_merge</incoming>
+      <incoming>flow_manual_merge</incoming>
+      <outgoing>flow_merge_log</outgoing>
+    </exclusiveGateway>
+
+    <!-- ═══════════════════════════════════════════════════════
+         ШАГИ 3-4: Логирование и уведомление
+    ═══════════════════════════════════════════════════════ -->
+    <serviceTask id="log_decision" name="Записать решение">
+      <extensionElements>
+        <zeebe:taskDefinition type="iar_log" retries="2" />
+      </extensionElements>
+      <incoming>flow_merge_log</incoming>
+      <outgoing>flow_log_executor</outgoing>
     </serviceTask>
 
-    <!-- User Task: Executor Inbox -->
-    <userTask id="executor_inbox" name="Входящее у исполнителя">
+    <!-- ═══════════════════════════════════════════════════════
+         ШАГ 5: Входящее у исполнителя
+    ═══════════════════════════════════════════════════════ -->
+    <userTask id="executor_inbox" name="Входящее&#10;у исполнителя">
       <extensionElements>
         <zeebe:assignmentDefinition assignee="=assignedTo" />
       </extensionElements>
-      <incoming>flow_notify_inbox</incoming>
-      <outgoing>flow_inbox_end</outgoing>
+      <incoming>flow_log_executor</incoming>
+      <outgoing>flow_executor_action_gw</outgoing>
     </userTask>
 
-    <!-- End Event -->
+    <!-- ═══════════════════════════════════════════════════════
+         ШЛЮЗ: Решение исполнителя
+    ═══════════════════════════════════════════════════════ -->
+    <exclusiveGateway id="executor_action_gw" name="Решение&#10;исполнителя">
+      <incoming>flow_executor_action_gw</incoming>
+      <outgoing>flow_accept</outgoing>
+      <outgoing>flow_reject_review</outgoing>
+    </exclusiveGateway>
+
+    <!-- ═══════════════════════════════════════════════════════
+         ШАГ 6: Уведомление о завершении
+    ═══════════════════════════════════════════════════════ -->
+    <serviceTask id="notify_done" name="Уведомить о&#10;назначении">
+      <extensionElements>
+        <zeebe:taskDefinition type="iar_notify" retries="2" />
+      </extensionElements>
+      <incoming>flow_accept</incoming>
+      <outgoing>flow_notify_end</outgoing>
+    </serviceTask>
+
+    <!-- ═══════════════════════════════════════════════════════
+         END
+    ═══════════════════════════════════════════════════════ -->
     <endEvent id="end" name="Завершено">
-      <incoming>flow_inbox_end</incoming>
+      <incoming>flow_notify_end</incoming>
     </endEvent>
 
-    <!-- Sequence Flows -->
-    <sequenceFlow id="flow_start_classify" sourceRef="start" targetRef="classify" />
-    <sequenceFlow id="flow_classify_review" sourceRef="classify" targetRef="manager_review" />
-    <sequenceFlow id="flow_review_notify" sourceRef="manager_review" targetRef="notify_executor" />
-    <sequenceFlow id="flow_notify_inbox" sourceRef="notify_executor" targetRef="executor_inbox" />
-    <sequenceFlow id="flow_inbox_end" sourceRef="executor_inbox" targetRef="end" />
+    <!-- ═══════════════════════════════════════════════════════
+         SEQUENCE FLOWS
+    ═══════════════════════════════════════════════════════ -->
+    <sequenceFlow id="flow_start_classify"  sourceRef="start"            targetRef="classify" />
+    <sequenceFlow id="flow_classify_gw"     sourceRef="classify"          targetRef="confidence_gw" />
+
+    <!-- Из шлюза уверенности -->
+    <sequenceFlow id="flow_gw_review" name="≥ 50%" sourceRef="confidence_gw" targetRef="manager_review">
+      <conditionExpression xsi:type="tFormalExpression">=confidence &gt;= 50</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_gw_manual" name="&lt; 50%" sourceRef="confidence_gw" targetRef="manager_manual">
+      <conditionExpression xsi:type="tFormalExpression">=confidence &lt; 50</conditionExpression>
+    </sequenceFlow>
+
+    <!-- К слиянию -->
+    <sequenceFlow id="flow_review_merge"  sourceRef="manager_review"  targetRef="merge_gw" />
+    <sequenceFlow id="flow_manual_merge"  sourceRef="manager_manual"  targetRef="merge_gw" />
+    <sequenceFlow id="flow_merge_log"     sourceRef="merge_gw"        targetRef="log_decision" />
+    <sequenceFlow id="flow_log_executor"  sourceRef="log_decision"    targetRef="executor_inbox" />
+    <sequenceFlow id="flow_executor_action_gw" sourceRef="executor_inbox" targetRef="executor_action_gw" />
+
+    <!-- Из шлюза исполнителя -->
+    <sequenceFlow id="flow_accept" name="Принял" sourceRef="executor_action_gw" targetRef="notify_done">
+      <conditionExpression xsi:type="tFormalExpression">=executorDecision = "ACCEPTED"</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="flow_reject_review" name="Отклонил / Оспорил" sourceRef="executor_action_gw" targetRef="manager_review">
+      <conditionExpression xsi:type="tFormalExpression">=executorDecision = "REJECTED" or executorDecision = "DISPUTED"</conditionExpression>
+    </sequenceFlow>
+
+    <sequenceFlow id="flow_notify_end"  sourceRef="notify_done" targetRef="end" />
 
   </process>
 
+  <!-- ═══════════════════════════════════════════════════════════════
+       DIAGRAM
+  ═══════════════════════════════════════════════════════════════ -->
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="iar-routing">
 
+      <!-- Start -->
       <bpmndi:BPMNShape id="start_di" bpmnElement="start">
-        <dc:Bounds x="152" y="162" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="130" y="205" width="80" height="27" />
-        </bpmndi:BPMNLabel>
+        <dc:Bounds x="152" y="182" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="130" y="225" width="80" height="27" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
+      <!-- classify -->
       <bpmndi:BPMNShape id="classify_di" bpmnElement="classify">
-        <dc:Bounds x="240" y="140" width="120" height="80" />
-        <bpmndi:BPMNLabel />
+        <dc:Bounds x="240" y="160" width="120" height="80" />
       </bpmndi:BPMNShape>
 
+      <!-- confidence_gw -->
+      <bpmndi:BPMNShape id="confidence_gw_di" bpmnElement="confidence_gw" isMarkerVisible="true">
+        <dc:Bounds x="425" y="175" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="408" y="232" width="84" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- manager_review (верхний ряд) -->
       <bpmndi:BPMNShape id="manager_review_di" bpmnElement="manager_review">
-        <dc:Bounds x="420" y="140" width="120" height="80" />
-        <bpmndi:BPMNLabel />
+        <dc:Bounds x="540" y="160" width="120" height="80" />
       </bpmndi:BPMNShape>
 
-      <bpmndi:BPMNShape id="notify_executor_di" bpmnElement="notify_executor">
-        <dc:Bounds x="600" y="140" width="120" height="80" />
-        <bpmndi:BPMNLabel />
+      <!-- manager_manual (нижний ряд) -->
+      <bpmndi:BPMNShape id="manager_manual_di" bpmnElement="manager_manual">
+        <dc:Bounds x="540" y="320" width="120" height="80" />
       </bpmndi:BPMNShape>
 
+      <!-- merge_gw -->
+      <bpmndi:BPMNShape id="merge_gw_di" bpmnElement="merge_gw" isMarkerVisible="true">
+        <dc:Bounds x="725" y="175" width="50" height="50" />
+      </bpmndi:BPMNShape>
+
+      <!-- log_decision -->
+      <bpmndi:BPMNShape id="log_decision_di" bpmnElement="log_decision">
+        <dc:Bounds x="840" y="160" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- executor_inbox -->
       <bpmndi:BPMNShape id="executor_inbox_di" bpmnElement="executor_inbox">
-        <dc:Bounds x="780" y="140" width="120" height="80" />
-        <bpmndi:BPMNLabel />
+        <dc:Bounds x="1030" y="160" width="120" height="80" />
       </bpmndi:BPMNShape>
 
+      <!-- executor_action_gw -->
+      <bpmndi:BPMNShape id="executor_action_gw_di" bpmnElement="executor_action_gw" isMarkerVisible="true">
+        <dc:Bounds x="1225" y="175" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1208" y="232" width="84" height="27" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- notify_done -->
+      <bpmndi:BPMNShape id="notify_done_di" bpmnElement="notify_done">
+        <dc:Bounds x="1350" y="160" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- End -->
       <bpmndi:BPMNShape id="end_di" bpmnElement="end">
-        <dc:Bounds x="962" y="162" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="956" y="205" width="48" height="14" />
-        </bpmndi:BPMNLabel>
+        <dc:Bounds x="1552" y="182" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1545" y="225" width="52" height="14" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
 
+      <!-- ── EDGES ── -->
       <bpmndi:BPMNEdge id="flow_start_classify_di" bpmnElement="flow_start_classify">
-        <di:waypoint x="188" y="180" />
-        <di:waypoint x="240" y="180" />
+        <di:waypoint x="188" y="200" /><di:waypoint x="240" y="200" />
       </bpmndi:BPMNEdge>
 
-      <bpmndi:BPMNEdge id="flow_classify_review_di" bpmnElement="flow_classify_review">
-        <di:waypoint x="360" y="180" />
-        <di:waypoint x="420" y="180" />
+      <bpmndi:BPMNEdge id="flow_classify_gw_di" bpmnElement="flow_classify_gw">
+        <di:waypoint x="360" y="200" /><di:waypoint x="425" y="200" />
       </bpmndi:BPMNEdge>
 
-      <bpmndi:BPMNEdge id="flow_review_notify_di" bpmnElement="flow_review_notify">
-        <di:waypoint x="540" y="180" />
-        <di:waypoint x="600" y="180" />
+      <!-- confidence_gw → manager_review (прямо) -->
+      <bpmndi:BPMNEdge id="flow_gw_review_di" bpmnElement="flow_gw_review">
+        <di:waypoint x="475" y="200" /><di:waypoint x="540" y="200" />
+        <bpmndi:BPMNLabel><dc:Bounds x="488" y="182" width="36" height="14" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
-      <bpmndi:BPMNEdge id="flow_notify_inbox_di" bpmnElement="flow_notify_inbox">
-        <di:waypoint x="720" y="180" />
-        <di:waypoint x="780" y="180" />
+      <!-- confidence_gw → manager_manual (вниз) -->
+      <bpmndi:BPMNEdge id="flow_gw_manual_di" bpmnElement="flow_gw_manual">
+        <di:waypoint x="450" y="225" /><di:waypoint x="450" y="360" /><di:waypoint x="540" y="360" />
+        <bpmndi:BPMNLabel><dc:Bounds x="455" y="280" width="36" height="14" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
 
-      <bpmndi:BPMNEdge id="flow_inbox_end_di" bpmnElement="flow_inbox_end">
-        <di:waypoint x="900" y="180" />
-        <di:waypoint x="962" y="180" />
+      <!-- manager_review → merge_gw -->
+      <bpmndi:BPMNEdge id="flow_review_merge_di" bpmnElement="flow_review_merge">
+        <di:waypoint x="660" y="200" /><di:waypoint x="725" y="200" />
+      </bpmndi:BPMNEdge>
+
+      <!-- manager_manual → merge_gw (вверх) -->
+      <bpmndi:BPMNEdge id="flow_manual_merge_di" bpmnElement="flow_manual_merge">
+        <di:waypoint x="660" y="360" /><di:waypoint x="750" y="360" /><di:waypoint x="750" y="225" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="flow_merge_log_di" bpmnElement="flow_merge_log">
+        <di:waypoint x="775" y="200" /><di:waypoint x="840" y="200" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="flow_log_executor_di" bpmnElement="flow_log_executor">
+        <di:waypoint x="960" y="200" /><di:waypoint x="1030" y="200" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="flow_executor_action_gw_di" bpmnElement="flow_executor_action_gw">
+        <di:waypoint x="1150" y="200" /><di:waypoint x="1225" y="200" />
+      </bpmndi:BPMNEdge>
+
+      <!-- executor_action_gw → notify_done (принял) -->
+      <bpmndi:BPMNEdge id="flow_accept_di" bpmnElement="flow_accept">
+        <di:waypoint x="1275" y="200" /><di:waypoint x="1350" y="200" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1289" y="182" width="46" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <!-- executor_action_gw → manager_review (петля назад) -->
+      <bpmndi:BPMNEdge id="flow_reject_review_di" bpmnElement="flow_reject_review">
+        <di:waypoint x="1250" y="225" />
+        <di:waypoint x="1250" y="460" />
+        <di:waypoint x="600"  y="460" />
+        <di:waypoint x="600"  y="240" />
+        <bpmndi:BPMNLabel><dc:Bounds x="880" y="442" width="110" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="flow_notify_end_di" bpmnElement="flow_notify_end">
+        <di:waypoint x="1470" y="200" /><di:waypoint x="1552" y="200" />
       </bpmndi:BPMNEdge>
 
     </bpmndi:BPMNPlane>
